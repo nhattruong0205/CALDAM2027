@@ -17,7 +17,7 @@ int main()
 
     printf("unrank(r):  ");
     print_array(arr, n);
-    for (int i = 4; i < 11; i++)
+    for (int i = 12; i < 13; i++)
     {
         ComputeTDistanceFromIdentity(i);
     }
