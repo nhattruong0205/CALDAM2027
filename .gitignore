@@ -1,0 +1,3 @@
+# Raw distance arrays — too large. Commit the .gz instead.
+dArray/*.txt
+!dArray/*.gz

@@ -1,11 +1,14 @@
-Goal: to improve the gap estimation of lower bound
+# Lower Bound Gap Estimation
 
-Testing
+**Goal:** improve the gap estimation of the lower bound.
 
-# command for running c program
+## Build and run
 
+```bash
 gcc -o main main.c function.c
-
 ./main
+```
 
-# When running using index-0 but when print index 1
+## Notes
+
+- Permutations are stored 0-indexed internally, but printed 1-indexed.
