@@ -20,7 +20,8 @@ gcc -obrew install git-lfs
 git lfs install
 ```
 
-## Zip big files using 
+## Zip big files using
+
 ```bash
 gzip -k dArray/distances_n12.txt
 ```
