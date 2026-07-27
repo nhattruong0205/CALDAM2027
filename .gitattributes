@@ -1,1 +1,2 @@
 dArray/*.txt filter=lfs diff=lfs merge=lfs -text
+dArray/*.gz filter=lfs diff=lfs merge=lfs -text
