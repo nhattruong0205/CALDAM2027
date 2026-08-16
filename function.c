@@ -338,6 +338,240 @@ int find_max_gap_permutation(int n)
     return best_gap;
 }
 
+// =============== Sorting with stacks in series ===============
+// Models `num_stacks` plain LIFO stacks chained Input -> S1 -> S2 -> ... ->
+// Sk -> Output: any value may be pushed onto any stack (no ordering
+// constraint). Every column -- S1, S2, S3, ... and Output -- is printed
+// left-is-top: the most recently arrived value is shown left-most. Because
+// of that, a value can only legally be popped to Output when it is the
+// largest value not yet output: each new arrival is the left-most (newest)
+// entry, so arrivals have to count down (n, n-1, ..., 1) for Output to read
+// as the ascending sorted sequence once printed left to right (anything
+// popped out of that order can never be fixed later, since Output only ever
+// gains new left-most entries). Which move to take when several are legal
+// actually matters -- e.g. shifting a stack's top onward as soon as possible
+// can bury a value under another with no way to dig it back out -- so this
+// runs a backtracking search over the legal moves (preferring the
+// right-most move first, since that is usually the winning choice and keeps
+// the search fast) rather than a single fixed-priority pass.
+
+typedef struct
+{
+    int items[MAX_N];
+    int top; // index of top element, -1 if empty
+} SeriesStack;
+
+static void sstack_init(SeriesStack *s) { s->top = -1; }
+static bool sstack_empty(const SeriesStack *s) { return s->top < 0; }
+static int sstack_top(const SeriesStack *s) { return s->items[s->top]; }
+static void sstack_push(SeriesStack *s, int v) { s->items[++s->top] = v; }
+static int sstack_pop(SeriesStack *s) { return s->items[s->top--]; }
+
+// Formats vals[0..len-1] as "v0+1 v1+1 ..." (1-indexed, matching print_array,
+// left-to-right in storage order), or "-" when len is 0. Used for Input,
+// where the front of the remaining queue is naturally left-most already.
+static void format_values(char *buf, size_t bufsize, const int *vals, int len)
+{
+    if (len == 0)
+    {
+        snprintf(buf, bufsize, "-");
+        return;
+    }
+    size_t pos = 0;
+    for (int i = 0; i < len; i++)
+    {
+        int written = snprintf(buf + pos, bufsize - pos, i == 0 ? "%d" : " %d", vals[i] + 1);
+        if (written < 0 || (size_t)written >= bufsize - pos)
+            break;
+        pos += (size_t)written;
+    }
+}
+
+// Formats vals[0..len-1] left-to-right in reverse storage order (index
+// len-1 first), or "-" when len is 0. Used for S1..Sk and Output, where
+// index len-1 is the most recently arrived value and left-is-top.
+static void format_values_reversed(char *buf, size_t bufsize, const int *vals, int len)
+{
+    if (len == 0)
+    {
+        snprintf(buf, bufsize, "-");
+        return;
+    }
+    size_t pos = 0;
+    for (int i = len - 1; i >= 0; i--)
+    {
+        int written = snprintf(buf + pos, bufsize - pos, i == len - 1 ? "%d" : " %d", vals[i] + 1);
+        if (written < 0 || (size_t)written >= bufsize - pos)
+            break;
+        pos += (size_t)written;
+    }
+}
+
+static void print_stack_row(const int *pi, int n, int in_pos, SeriesStack *stacks,
+                             int num_stacks, const int *output, int out_len)
+{
+    char buf[128];
+
+    format_values(buf, sizeof(buf), pi + in_pos, n - in_pos);
+    printf("%-10s| ", buf);
+
+    for (int i = 0; i < num_stacks; i++)
+    {
+        format_values_reversed(buf, sizeof(buf), stacks[i].items, stacks[i].top + 1);
+        printf("%-6s| ", buf);
+    }
+
+    format_values_reversed(buf, sizeof(buf), output, out_len);
+    printf("%s\n", buf);
+}
+
+#define MAX_MOVES (MAX_N * (MAX_STACKS + 1))
+
+// Move codes recorded in StackSortSearch.path:
+//   0 .. num_stacks-2  -> shift stacks[code] onto stacks[code+1]
+//   num_stacks - 1     -> pop the last stack to output
+//   num_stacks         -> push the next input value onto stacks[0]
+typedef struct
+{
+    SeriesStack stacks[MAX_STACKS];
+    int num_stacks;
+    const int *pi;
+    int n;
+    int in_pos;
+    int next_needed;
+    int out_len;
+    int path[MAX_MOVES];
+    int path_len;
+} StackSortSearch;
+
+// Backtracking search: tries every legal move from the current state
+// (right-most move first), recursing and undoing on failure. Records the
+// winning sequence of moves in st->path. Returns true iff the output can be
+// fully sorted from this state.
+static bool dfs_sort(StackSortSearch *st)
+{
+    if (st->out_len == st->n)
+        return true;
+
+    int k = st->num_stacks;
+    SeriesStack *last = &st->stacks[k - 1];
+
+    if (!sstack_empty(last) && sstack_top(last) == st->next_needed)
+    {
+        int v = sstack_pop(last);
+        st->next_needed--;
+        st->out_len++;
+        st->path[st->path_len++] = k - 1;
+
+        if (dfs_sort(st))
+            return true;
+
+        st->path_len--;
+        st->out_len--;
+        st->next_needed++;
+        sstack_push(last, v);
+    }
+
+    for (int i = k - 2; i >= 0; i--)
+    {
+        SeriesStack *src = &st->stacks[i];
+        SeriesStack *dst = &st->stacks[i + 1];
+        if (!sstack_empty(src))
+        {
+            int v = sstack_pop(src);
+            sstack_push(dst, v);
+            st->path[st->path_len++] = i;
+
+            if (dfs_sort(st))
+                return true;
+
+            st->path_len--;
+            sstack_pop(dst);
+            sstack_push(src, v);
+        }
+    }
+
+    if (st->in_pos < st->n)
+    {
+        SeriesStack *first = &st->stacks[0];
+        sstack_push(first, st->pi[st->in_pos]);
+        st->in_pos++;
+        st->path[st->path_len++] = k;
+
+        if (dfs_sort(st))
+            return true;
+
+        st->path_len--;
+        st->in_pos--;
+        sstack_pop(first);
+    }
+
+    return false;
+}
+
+// Sorts pi (0-indexed permutation of size n) using `num_stacks` stacks
+// chained in series (Input -> S1 -> ... -> S{num_stacks} -> Output), via
+// backtracking search over the legal moves. Returns true iff some legal
+// sequence sorts pi; if verbose, replays and prints the winning sequence as
+// a step-by-step trace table (or reports that no sequence exists).
+bool sort_with_stacks(const int *pi, int n, int num_stacks, bool verbose)
+{
+    StackSortSearch st;
+    for (int i = 0; i < num_stacks; i++)
+        sstack_init(&st.stacks[i]);
+    st.num_stacks = num_stacks;
+    st.pi = pi;
+    st.n = n;
+    st.in_pos = 0;
+    st.next_needed = n - 1; // arrivals at Output must count down n-1, n-2, ..., 0
+    st.out_len = 0;
+    st.path_len = 0;
+
+    if (!dfs_sort(&st))
+    {
+        if (verbose)
+            printf("Not sortable with %d stack(s) in series: no legal move "
+                   "sequence sorts this permutation.\n",
+                   num_stacks);
+        return false;
+    }
+
+    if (verbose)
+    {
+        SeriesStack stacks[MAX_STACKS];
+        for (int i = 0; i < num_stacks; i++)
+            sstack_init(&stacks[i]);
+        int output[MAX_N];
+        int out_len = 0;
+        int in_pos = 0;
+
+        printf("%-10s| ", "Input");
+        for (int i = 0; i < num_stacks; i++)
+        {
+            char label[8];
+            snprintf(label, sizeof(label), "S%d", i + 1);
+            printf("%-6s| ", label);
+        }
+        printf("Output\n");
+        print_stack_row(pi, n, in_pos, stacks, num_stacks, output, out_len);
+
+        for (int m = 0; m < st.path_len; m++)
+        {
+            int code = st.path[m];
+            if (code == num_stacks)
+                sstack_push(&stacks[0], pi[in_pos++]);
+            else if (code == num_stacks - 1)
+                output[out_len++] = sstack_pop(&stacks[num_stacks - 1]);
+            else
+                sstack_push(&stacks[code + 1], sstack_pop(&stacks[code]));
+
+            print_stack_row(pi, n, in_pos, stacks, num_stacks, output, out_len);
+        }
+    }
+
+    return true;
+}
+
 // Original recursive rank1 function: computes the lexicographic rank of a permutation
 int rank1(int n, int pi[], int pi_inv[])
 {

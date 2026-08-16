@@ -1,7 +1,9 @@
 #include <stddef.h>
+#include <stdbool.h>
 
 #define MAX_N 20
 #define MAX_CYCLE_VERTS (2 * MAX_N + 4)
+#define MAX_STACKS 8
 
 typedef struct
 {
@@ -47,3 +49,6 @@ int count_odd_cycles(const int *cycle_len, int n_cycles);
 int lower_bound(int n, int c_odd);
 int lower_bound_from_permutation(const int *pi, int n);
 int find_max_gap_permutation(int n);
+
+// Stacks in series (Input -> S1 -> ... -> S{num_stacks} -> Output)
+bool sort_with_stacks(const int *pi, int n, int num_stacks, bool verbose);
